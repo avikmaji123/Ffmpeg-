@@ -1,5 +1,5 @@
 # Use Node 20 to eliminate Supabase warnings and improve memory management
-FROM node:20-bullseye
+FROM node:20-bookworm
 
 # Install core system dependencies required for video manipulation
 RUN apt-get update && apt-get install -y \
