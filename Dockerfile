@@ -1,10 +1,7 @@
-# Use a highly stable Linux machine with Node.js 18
-FROM node:18-bullseye
+# Use Node 20 to eliminate Supabase warnings and improve memory management
+FROM node:20-bullseye
 
-# Update the system and install the heavy-duty video tools:
-# - ffmpeg: To crop, add borders, mix music, and burn subtitles
-# - python3: Required to run yt-dlp
-# - fonts-liberation: CRITICAL. Without this, FFmpeg cannot draw the subtitles!
+# Install core system dependencies required for video manipulation
 RUN apt-get update && apt-get install -y \
     ffmpeg \
     python3 \
@@ -13,22 +10,22 @@ RUN apt-get update && apt-get install -y \
     fonts-liberation \
     && rm -rf /var/lib/apt/lists/*
 
-# Download and install the absolute latest version of yt-dlp directly from GitHub
+# Install the absolute latest version of yt-dlp directly from the source
 RUN curl -L https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp -o /usr/local/bin/yt-dlp
 RUN chmod a+rx /usr/local/bin/yt-dlp
 
-# Set the working directory inside the Render server
+# Set the working directory
 WORKDIR /app
 
-# Copy your package.json first (this makes Render build faster on future updates)
+# Copy package configurations and install node modules
 COPY package*.json ./
 RUN npm install
 
-# Copy all your code, including server.js and your 'bgm' folder with the mp3 files
+# Copy the entire server logic and the 'bgm' folder
 COPY . .
 
-# Expose port 3000 so Render can send traffic to your API
+# Expose the port for Render routing
 EXPOSE 3000
 
-# Start the Viral Video Engine
+# Start the application
 CMD ["node", "server.js"]
