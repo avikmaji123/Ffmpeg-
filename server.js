@@ -59,7 +59,7 @@ app.get('/', (req, res) => {
     <head>
         <meta charset="UTF-8">
         <meta name="viewport" content="width=device-width, initial-scale=1.0">
-        <title>Viral Engine V7 Dashboard</title>
+        <title>Viral Engine V8 Dashboard</title>
         <style>
             body { font-family: -apple-system, BlinkMacSystemFont, sans-serif; background-color: #0d1117; color: #c9d1d9; padding: 40px; }
             .container { max-width: 800px; margin: auto; background-color: #161b22; padding: 30px; border-radius: 12px; border: 1px solid #30363d; }
@@ -72,12 +72,12 @@ app.get('/', (req, res) => {
     </head>
     <body>
         <div class="container">
-            <h1>🚀 Viral Engine V7 (Smart Bot-Bypass)</h1>
+            <h1>🚀 Viral Engine V8 (iOS/TV Spoofing)</h1>
             <div class="card">
                 <h3>Status</h3>
                 <p>Core: <span class="badge ok">Online</span></p>
                 <p>Supabase: ${isSupabaseConnected ? '<span class="badge ok">Configured</span>' : '<span class="badge warn">Missing Keys</span>'}</p>
-                <p>Anti-Bot Mode: ${hasCookies ? '<span class="badge ok">Desktop Cookies (Active)</span>' : '<span class="badge warn">Android Spoofing (Active)</span>'}</p>
+                <p>Bypass Mode: ${hasCookies ? '<span class="badge ok">Cookies Active (Must be Desktop!)</span>' : '<span class="badge warn">iPhone & Smart TV Spoofing (Active)</span>'}</p>
             </div>
         </div>
     </body>
@@ -132,7 +132,7 @@ app.post('/process-short', async (req, res) => {
         });
         fs.writeFileSync(srtFile, srtContent);
 
-        // 2. SMART DOWNLOAD ENGINE
+        // 2. SMART DOWNLOAD ENGINE (V8 Upgrades)
         const cookiesPath = path.join(__dirname, 'cookies.txt');
         const hasCookies = fs.existsSync(cookiesPath);
         
@@ -140,18 +140,18 @@ app.post('/process-short', async (req, res) => {
         
         if (hasCookies) {
             console.log(`[JOB ${jobId}] Using Cookie Authentication Mode...`);
-            // STRICTLY uses cookies, drops the Android disguise to prevent clashes, highly flexible format fallback
-            downloadCmd = `yt-dlp --rm-cache-dir --cookies "${cookiesPath}" -f "bestvideo[ext=mp4]+bestaudio[ext=m4a]/b" --download-sections "*${startTime}-${endTime}" "${youtubeUrl}" -o "${rawVideo}"`;
+            // Standard cookie run, but widened format acceptance so it doesn't fail if specific MP4s are missing
+            downloadCmd = `yt-dlp --cookies "${cookiesPath}" -f "bestvideo[height<=1080]+bestaudio/best" --download-sections "*${startTime}-${endTime}" "${youtubeUrl}" -o "${rawVideo}"`;
         } else {
-            console.log(`[JOB ${jobId}] Using Android Spoofing Mode...`);
-            // Uses Android spoofing ONLY if cookies aren't present
-            downloadCmd = `yt-dlp --rm-cache-dir --js-runtimes node --extractor-args "youtube:player_client=android,web" -f "bestvideo[ext=mp4]+bestaudio[ext=m4a]/b" --download-sections "*${startTime}-${endTime}" "${youtubeUrl}" -o "${rawVideo}"`;
+            console.log(`[JOB ${jobId}] Using iOS & Smart TV Spoofing Mode...`);
+            // V8 UPGRADE: Uses 'ios,tv' clients which currently bypass the 'n challenge' block best without cookies
+            downloadCmd = `yt-dlp --js-runtimes node --extractor-args "youtube:player_client=ios,tv,web" -f "bestvideo[height<=1080]+bestaudio/best" --download-sections "*${startTime}-${endTime}" "${youtubeUrl}" -o "${rawVideo}"`;
         }
         
         exec(downloadCmd, { maxBuffer: 1024 * 1024 * 10 }, async (dlError, stdout, stderr) => {
             if (dlError) {
                 console.error(`[JOB ${jobId}] Download Error:`, stderr);
-                processQueue.set(jobId, { status: 'Failed: Download Error', error: stderr });
+                processQueue.set(jobId, { status: 'Failed: Download Error (Bot Blocked)', error: stderr });
                 return cleanupFiles([srtFile, rawVideo]);
             }
 
@@ -215,4 +215,4 @@ app.post('/process-short', async (req, res) => {
 });
 
 const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => console.log(`🚀 Viral Engine V7 Online on port ${PORT}`));
+app.listen(PORT, () => console.log(`🚀 Viral Engine V8 Online on port ${PORT}`));
