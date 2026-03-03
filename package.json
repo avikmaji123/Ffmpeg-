@@ -1,6 +1,6 @@
 {
   "name": "viral-video-engine-pro",
-  "version": "3.0.0",
+  "version": "4.0.0",
   "description": "Enterprise API for automated YouTube Shorts generation",
   "main": "server.js",
   "scripts": {
