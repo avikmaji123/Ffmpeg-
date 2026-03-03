@@ -1,232 +1,172 @@
 const express = require('express');
-const multer = require('multer');
-const ffmpeg = require('fluent-ffmpeg');
 const fs = require('fs');
+const { exec } = require('child_process');
+const cors = require('cors');
+const helmet = require('helmet');
+const morgan = require('morgan');
+const { v4: uuidv4 } = require('uuid');
 const path = require('path');
-const cron = require('node-cron');
 const { createClient } = require('@supabase/supabase-js');
 
+// ---------------------------------------------------------
+// SECRETS & SUPABASE INITIALIZATION
+// ---------------------------------------------------------
+// Pulls your Supabase keys from Render's Environment Variables
+const supabaseUrl = process.env.SUPABASE_URL || 'https://ugjmpmsmuyrlkhqgvfwp.supabase.co';
+const supabaseKey = process.env.SUPABASE_KEY;
+const supabase = createClient(supabaseUrl, supabaseKey);
+
 const app = express();
-const port = process.env.PORT || 3000;
+app.use(helmet());
+app.use(cors());
+app.use(morgan('dev'));
+app.use(express.json({ limit: '100mb' }));
 
-// Initialize Supabase
-const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_KEY);
+// ---------------------------------------------------------
+// THE VIDEO STYLING ENGINE
+// ---------------------------------------------------------
+// High-converting dark-mode backgrounds and neon borders
+const BACKGROUND_COLORS = ['#0f172a', '#1e1b4b', '#2e1065', '#27272a', '#052e16', '#171717'];
+const BORDER_COLORS = ['#38bdf8', '#a78bfa', '#f472b6', '#fbbf24', '#34d399', '#f87171'];
 
-// 20MB Upload Limit
-const upload = multer({ dest: '/tmp/', limits: { fileSize: 20 * 1024 * 1024 } });
+function formatSrtTime(seconds) {
+    const date = new Date(Math.max(0, seconds) * 1000);
+    const hh = String(date.getUTCHours()).padStart(2, '0');
+    const mm = String(date.getUTCMinutes()).padStart(2, '0');
+    const ss = String(date.getUTCSeconds()).padStart(2, '0');
+    const ms = String(date.getUTCMilliseconds()).padStart(3, '0');
+    return `${hh}:${mm}:${ss},${ms}`;
+}
 
-// ==========================================
-// CORE HELPERS & ERROR HANDLING
-// ==========================================
-
-// Safely delete files from the local server
-const cleanupFiles = (files) => {
+function cleanupFiles(files) {
     files.forEach(file => {
-        if (file && fs.existsSync(file)) fs.unlinkSync(file);
+        if (fs.existsSync(file)) {
+            try { fs.unlinkSync(file); } 
+            catch (err) { console.error(`Failed to delete ${file}`); }
+        }
     });
-};
+}
 
-// Upload to Supabase and return the public URL
-const uploadToSupabase = async (localFilePath, fileName) => {
-    const fileBuffer = fs.readFileSync(localFilePath);
-    const { error } = await supabase.storage.from('videos').upload(fileName, fileBuffer, {
-        contentType: 'video/mp4',
-        upsert: true
-    });
-    if (error) throw error;
-    const { data } = supabase.storage.from('videos').getPublicUrl(fileName);
-    return data.publicUrl;
-};
+// ---------------------------------------------------------
+// ROUTES
+// ---------------------------------------------------------
+app.get('/', (req, res) => res.send('🚀 Supabase Viral Engine Online'));
 
-// The Master Processing Wrapper: Handles memory limits, uploads, and error cleanups
-const processAndUpload = (res, ffmpegCommand, outputPath, inputFiles) => {
-    ffmpegCommand
-        // CRITICAL FOR FREE TIER: Restricts CPU threads to prevent Out of Memory crashes
-        .outputOptions(['-threads 1', '-preset ultrafast']) 
-        .on('end', async () => {
-            try {
-                const publicUrl = await uploadToSupabase(outputPath, path.basename(outputPath));
-                res.json({ success: true, downloadUrl: publicUrl });
-            } catch (err) {
-                console.error('Supabase Error:', err.message);
-                res.status(500).json({ error: 'Processing succeeded, but cloud upload failed.', details: err.message });
-            } finally {
-                // ALWAYS clean up files, even if upload fails
-                cleanupFiles([...inputFiles, outputPath]);
+app.post('/process-short', async (req, res) => {
+    const { youtubeUrl, startTime, endTime, fullTranscript } = req.body;
+    const jobId = uuidv4().substring(0, 8);
+
+    if (!youtubeUrl || startTime === undefined || !fullTranscript || !supabaseKey) {
+        return res.status(400).json({ error: 'Missing payload data or Supabase Key.' });
+    }
+
+    const srtFile = path.join(__dirname, `sub_${jobId}.srt`);
+    const rawVideo = path.join(__dirname, `raw_${jobId}.mp4`);
+    const finalVideo = path.join(__dirname, `final_${jobId}.mp4`);
+    const finalFileName = `viral_short_${jobId}.mp4`;
+
+    try {
+        console.log(`\n[JOB ${jobId}] STARTED - URL: ${youtubeUrl}`);
+
+        // 1. GENERATE SRT FILE
+        let srtContent = '';
+        let subtitleIndex = 1;
+        fullTranscript.forEach(line => {
+            if (line.start >= startTime && line.end <= endTime) {
+                const startMath = line.start - startTime;
+                const endMath = line.end - startTime;
+                srtContent += `${subtitleIndex}\n${formatSrtTime(startMath)} --> ${formatSrtTime(endMath)}\n${line.text}\n\n`;
+                subtitleIndex++;
             }
-        })
-        .on('error', (err) => {
-            console.error('FFmpeg Error:', err.message);
-            cleanupFiles([...inputFiles, outputPath]); // Delete corrupted/incomplete files
-            res.status(500).json({ error: 'Video processing failed.', details: err.message });
-        })
-        .save(outputPath);
-};
+        });
+        fs.writeFileSync(srtFile, srtContent);
 
-// ==========================================
-// API ENDPOINTS
-// ==========================================
-
-// 1. TRIM
-app.post('/trim', upload.single('video'), (req, res) => {
-    if (!req.file) return res.status(400).json({ error: 'Video file required.' });
-    const { startTime = 0, duration = 5 } = req.body;
-    const outputPath = `/tmp/trimmed_${Date.now()}.mp4`;
-
-    const cmd = ffmpeg(req.file.path)
-        .setStartTime(startTime)
-        .setDuration(duration)
-        .outputOptions('-c copy'); // Copy codec saves massive RAM
-
-    processAndUpload(res, cmd, outputPath, [req.file.path]);
-});
-
-// 2. CROP
-app.post('/crop', upload.single('video'), (req, res) => {
-    if (!req.file) return res.status(400).json({ error: 'Video file required.' });
-    const { w = 1080, h = 1920, x = 0, y = 0 } = req.body;
-    const outputPath = `/tmp/cropped_${Date.now()}.mp4`;
-
-    const cmd = ffmpeg(req.file.path).videoFilters(`crop=${w}:${h}:${x}:${y}`);
-    processAndUpload(res, cmd, outputPath, [req.file.path]);
-});
-
-// 3. ADD VOICE / AUDIO
-app.post('/add-voice', upload.fields([{ name: 'video', maxCount: 1 }, { name: 'audio', maxCount: 1 }]), (req, res) => {
-    if (!req.files.video || !req.files.audio) return res.status(400).json({ error: 'Video and Audio files required.' });
-    const outputPath = `/tmp/voiced_${Date.now()}.mp4`;
-
-    const cmd = ffmpeg(req.files.video[0].path)
-        .addInput(req.files.audio[0].path)
-        .outputOptions(['-c:v copy', '-map 0:v:0', '-map 1:a:0', '-shortest']);
-
-    processAndUpload(res, cmd, outputPath, [req.files.video[0].path, req.files.audio[0].path]);
-});
-
-// 4. ADD CAPTIONS
-app.post('/add-caption', upload.fields([{ name: 'video', maxCount: 1 }, { name: 'subtitle', maxCount: 1 }]), (req, res) => {
-    if (!req.files.video || !req.files.subtitle) return res.status(400).json({ error: 'Video and .srt Subtitle files required.' });
-    const outputPath = `/tmp/captioned_${Date.now()}.mp4`;
-    const subPath = path.resolve(req.files.subtitle[0].path);
-
-    const cmd = ffmpeg(req.files.video[0].path).videoFilters(`subtitles=${subPath}`);
-    processAndUpload(res, cmd, outputPath, [req.files.video[0].path, subPath]);
-});
-
-// 5. MERGE (Handled slightly differently in fluent-ffmpeg)
-app.post('/merge', upload.array('videos', 2), (req, res) => {
-    if (!req.files || req.files.length !== 2) return res.status(400).json({ error: 'Exactly 2 videos required.' });
-    const outputPath = `/tmp/merged_${Date.now()}.mp4`;
-    const inputPaths = req.files.map(f => f.path);
-
-    let cmd = ffmpeg();
-    inputPaths.forEach(p => cmd.input(p));
-
-    cmd.outputOptions(['-threads 1', '-preset ultrafast'])
-        .on('end', async () => {
-            try {
-                const url = await uploadToSupabase(outputPath, path.basename(outputPath));
-                res.json({ success: true, downloadUrl: url });
-            } catch (err) {
-                res.status(500).json({ error: 'Cloud upload failed.', details: err.message });
-            } finally {
-                cleanupFiles([...inputPaths, outputPath]);
+        // 2. DOWNLOAD CLIP
+        console.log(`[JOB ${jobId}] Downloading segment...`);
+        const downloadCmd = `yt-dlp -f "bestvideo[height<=1080][ext=mp4]+bestaudio[ext=m4a]/mp4" --download-sections "*${startTime}-${endTime}" "${youtubeUrl}" -o "${rawVideo}"`;
+        
+        exec(downloadCmd, { maxBuffer: 1024 * 1024 * 10 }, async (dlError) => {
+            if (dlError) {
+                cleanupFiles([srtFile, rawVideo]);
+                return res.status(500).json({ error: 'Download failed.' });
             }
-        })
-        .on('error', (err) => {
-            cleanupFiles([...inputPaths, outputPath]);
-            res.status(500).json({ error: 'Merge failed.', details: err.message });
-        })
-        .mergeToFile(outputPath, '/tmp/');
-});
 
-// ==========================================
-// BACKGROUND AUTOMATION & DOCS
-// ==========================================
-
-// UptimeRobot Health Check
-app.get('/health', (req, res) => res.status(200).send('OK'));
-
-// Supabase Auto-Delete Cron Job (Runs every hour)
-cron.schedule('0 * * * *', async () => {
-    console.log('Running 24h cleanup...');
-    const oneDayAgo = new Date(Date.now() - 24 * 60 * 60 * 1000);
-    const { data: files } = await supabase.storage.from('videos').list();
-    if (!files) return;
-
-    const filesToDelete = files.filter(f => new Date(f.created_at) < oneDayAgo).map(f => f.name);
-    if (filesToDelete.length > 0) await supabase.storage.from('videos').remove(filesToDelete);
-});
-
-// The API Documentation UI
-app.get('/', (req, res) => {
-    res.send(`
-        <!DOCTYPE html>
-        <html>
-        <head>
-            <title>Movies Hub Pro - Automation API</title>
-            <style>
-                body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background-color: #0d1117; color: #c9d1d9; max-width: 800px; margin: 40px auto; padding: 20px; line-height: 1.6; }
-                h1 { color: #58a6ff; border-bottom: 1px solid #30363d; padding-bottom: 10px; }
-                .endpoint { background: #161b22; border: 1px solid #30363d; border-radius: 8px; padding: 20px; margin-bottom: 20px; }
-                .badge { background: #238636; color: white; padding: 4px 8px; border-radius: 4px; font-weight: bold; font-size: 14px; margin-right: 10px; }
-                code { background: #21262d; padding: 2px 6px; border-radius: 4px; color: #ff7b72; font-family: monospace; }
-            </style>
-        </head>
-        <body>
-            <h1>🎬 Movies Hub Pro - Video Automation API</h1>
-            <p>Welcome to your dedicated video processing engine. Send HTTP POST requests to the endpoints below using Postman or your preferred code environment. Maximum file size: 20MB.</p>
+            // 3. THE MAGIC FFmpeg BUILDER
+            const bgColor = BACKGROUND_COLORS[Math.floor(Math.random() * BACKGROUND_COLORS.length)];
+            const borderColor = BORDER_COLORS[Math.floor(Math.random() * BORDER_COLORS.length)];
             
-            <div class="endpoint">
-                <h3><span class="badge">POST</span> /trim</h3>
-                <p>Cuts a specific segment out of a video.</p>
-                <ul>
-                    <li><code>video</code>: The video file (form-data).</li>
-                    <li><code>startTime</code>: Seconds to start cutting from (e.g., 0).</li>
-                    <li><code>duration</code>: Length of the clip in seconds (e.g., 15 for a Short).</li>
-                </ul>
-            </div>
-
-            <div class="endpoint">
-                <h3><span class="badge">POST</span> /crop</h3>
-                <p>Crops the video dimensions.</p>
-                <ul>
-                    <li><code>video</code>: The video file (form-data).</li>
-                    <li><code>w</code>, <code>h</code>: Width and Height (e.g., 1080 and 1920 for vertical).</li>
-                    <li><code>x</code>, <code>y</code>: Coordinates to start cropping from (default 0).</li>
-                </ul>
-            </div>
-
-            <div class="endpoint">
-                <h3><span class="badge">POST</span> /add-voice</h3>
-                <p>Overlays a new audio track onto a video.</p>
-                <ul>
-                    <li><code>video</code>: The video file (form-data).</li>
-                    <li><code>audio</code>: The audio file (mp3/wav) (form-data).</li>
-                </ul>
-            </div>
-
-            <div class="endpoint">
-                <h3><span class="badge">POST</span> /add-caption</h3>
-                <p>Burns a subtitle file directly into the video.</p>
-                <ul>
-                    <li><code>video</code>: The video file (form-data).</li>
-                    <li><code>subtitle</code>: The .srt subtitle file (form-data).</li>
-                </ul>
-            </div>
-
-            <div class="endpoint">
-                <h3><span class="badge">POST</span> /merge</h3>
-                <p>Combines two videos together sequentially.</p>
-                <ul>
-                    <li><code>videos</code>: Upload exactly 2 video files under the same key name (form-data).</li>
-                </ul>
-            </div>
+            // Look for a random BGM track in the local bgm/ folder
+            let bgmCommand = '';
+            let audioFilter = '-c:a copy'; // Default: just copy original audio
+            const bgmDir = path.join(__dirname, 'bgm');
             
-            <p style="text-align: center; color: #8b949e; font-size: 14px; margin-top: 40px;">System Status: Online | Auto-Deletion: 24 Hours</p>
-        </body>
-        </html>
-    `);
+            if (fs.existsSync(bgmDir)) {
+                const files = fs.readdirSync(bgmDir).filter(f => f.endsWith('.mp3'));
+                if (files.length > 0) {
+                    const randomBgm = path.join(bgmDir, files[Math.floor(Math.random() * files.length)]);
+                    console.log(`[JOB ${jobId}] Applying BGM: ${randomBgm}`);
+                    // Loop the music endlessly, lower its volume to 10%, keep podcast volume at 100%
+                    bgmCommand = `-stream_loop -1 -i "${randomBgm}"`;
+                    audioFilter = `-filter_complex "[0:a]volume=1.0[main];[1:a]volume=0.10[bgm];[main][bgm]amix=inputs=2:duration=first:dropout_transition=0" -c:a aac`;
+                }
+            }
+
+            console.log(`[JOB ${jobId}] Composing Video (Colors: ${bgColor}, ${borderColor})...`);
+            
+            // The ultimate FFmpeg filter:
+            // 1. Scale video width to 1000px
+            // 2. Add a 10px colored border
+            // 3. Pad the background to a perfect vertical 1080x1920 with a random color
+            // 4. Burn in the subtitles with a custom yellow font & outline
+            const videoFilter = `-vf "scale=1000:-1:force_original_aspect_ratio=decrease,pad=1020:ih+20:(ow-iw)/2:(oh-ih)/2:color='${borderColor}',pad=1080:1920:(ow-iw)/2:(oh-ih)/2:color='${bgColor}',subtitles=${srtFile}:force_style='Fontname=Liberation Sans,FontSize=24,PrimaryColour=&H00FFFF,Outline=1,Shadow=2,MarginV=120'"`;
+
+            const ffmpegCmd = `ffmpeg -i "${rawVideo}" ${bgmCommand} ${videoFilter} ${audioFilter} -c:v libx264 -preset fast -shortest "${finalVideo}"`;
+
+            exec(ffmpegCmd, { maxBuffer: 1024 * 1024 * 10 }, async (ffError) => {
+                if (ffError) {
+                    cleanupFiles([srtFile, rawVideo, finalVideo]);
+                    return res.status(500).json({ error: 'Video processing failed.' });
+                }
+
+                // 4. UPLOAD TO SUPABASE
+                console.log(`[JOB ${jobId}] Uploading to Supabase...`);
+                try {
+                    const videoBuffer = fs.readFileSync(finalVideo);
+                    const { data, error } = await supabase.storage
+                        .from('shorts') // YOUR BUCKET NAME
+                        .upload(finalFileName, videoBuffer, { contentType: 'video/mp4', upsert: true });
+
+                    if (error) throw error;
+
+                    // Get the public viewing URL
+                    const { data: publicUrlData } = supabase.storage.from('shorts').getPublicUrl(finalFileName);
+                    
+                    console.log(`[JOB ${jobId}] Success! Video available at: ${publicUrlData.publicUrl}`);
+
+                    // 5. THE ZERO-LOAD CLEANUP (Instantly delete from server)
+                    cleanupFiles([srtFile, rawVideo, finalVideo]);
+
+                    // Send the Supabase URL back to n8n!
+                    res.status(200).json({ 
+                        message: 'Video created and uploaded to Supabase successfully!',
+                        videoUrl: publicUrlData.publicUrl,
+                        jobId: jobId
+                    });
+
+                } catch (supaError) {
+                    console.error(`[JOB ${jobId}] Supabase upload failed:`, supaError);
+                    cleanupFiles([srtFile, rawVideo, finalVideo]);
+                    res.status(500).json({ error: 'Failed to upload to Supabase.' });
+                }
+            });
+        });
+
+    } catch (error) {
+        console.error(`[JOB ${jobId}] Fatal crash:`, error);
+        cleanupFiles([srtFile, rawVideo, finalVideo]);
+        res.status(500).json({ error: 'Internal server error.' });
+    }
 });
 
-app.listen(port, () => console.log(`API running on port ${port}`));
+const PORT = process.env.PORT || 3000;
+app.listen(PORT, () => console.log(`🚀 Supabase Viral Engine listening on port ${PORT}`));
