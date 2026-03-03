@@ -16,12 +16,12 @@ const supabaseKey = process.env.SUPABASE_KEY || '';
 const supabase = (supabaseUrl && supabaseKey) ? createClient(supabaseUrl, supabaseKey) : null;
 
 const app = express();
-app.use(helmet({ contentSecurityPolicy: false })); // Disabled CSP temporarily to allow inline styles in our UI
+app.use(helmet({ contentSecurityPolicy: false })); 
 app.use(cors());
 app.use(morgan('dev'));
 app.use(express.json({ limit: '100mb' }));
 
-// Styling Arrays
+// Styling Arrays for Videos
 const BACKGROUND_COLORS = ['#0f172a', '#1e1b4b', '#2e1065', '#27272a', '#052e16', '#171717'];
 const BORDER_COLORS = ['#38bdf8', '#a78bfa', '#f472b6', '#fbbf24', '#34d399', '#f87171'];
 
@@ -51,6 +51,7 @@ function cleanupFiles(files) {
 // ---------------------------------------------------------
 app.get('/', (req, res) => {
     const isSupabaseConnected = supabase !== null;
+    const hasCookies = fs.existsSync(path.join(__dirname, 'cookies.txt'));
     
     const html = `
     <!DOCTYPE html>
@@ -60,7 +61,7 @@ app.get('/', (req, res) => {
         <meta name="viewport" content="width=device-width, initial-scale=1.0">
         <title>Viral Video Engine Dashboard</title>
         <style>
-            body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; background-color: #0d1117; color: #c9d1d9; margin: 0; padding: 40px; }
+            body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background-color: #0d1117; color: #c9d1d9; margin: 0; padding: 40px; }
             .container { max-width: 800px; margin: 0 auto; background-color: #161b22; padding: 30px; border-radius: 12px; border: 1px solid #30363d; box-shadow: 0 8px 24px rgba(0,0,0,0.5); }
             h1 { color: #58a6ff; border-bottom: 1px solid #30363d; padding-bottom: 10px; }
             .status-badge { display: inline-block; padding: 5px 12px; border-radius: 20px; font-weight: bold; font-size: 14px; }
@@ -73,32 +74,23 @@ app.get('/', (req, res) => {
     </head>
     <body>
         <div class="container">
-            <h1>🚀 Supabase Viral Engine</h1>
+            <h1>🚀 Supabase Viral Engine (V5)</h1>
             
             <div class="card">
                 <h3>System Status</h3>
                 <p>Engine Core: <span class="status-badge status-ok">Online & Listening</span></p>
                 <p>Supabase Connection: 
-                    ${isSupabaseConnected 
-                        ? '<span class="status-badge status-ok">Configured</span>' 
-                        : '<span class="status-badge status-warn">Missing Environment Keys</span>'}
+                    ${isSupabaseConnected ? '<span class="status-badge status-ok">Configured</span>' : '<span class="status-badge status-warn">Missing Keys</span>'}
+                </p>
+                <p>Anti-Bot Cookie Bypass: 
+                    ${hasCookies ? '<span class="status-badge status-ok">Active (cookies.txt found)</span>' : '<span class="status-badge status-warn">Inactive (Using Android Spoof)</span>'}
                 </p>
             </div>
 
             <div class="card">
                 <h3>API Reference</h3>
                 <p><span class="method">POST</span> <code>/process-short</code></p>
-                <p>Sends a job to the FFmpeg engine to download, crop, subtitle, and upload a video.</p>
-                
-                <h4>Required Payload (JSON):</h4>
-                <pre>{
-  "youtubeUrl": "https://www.youtube.com/watch?v=...",
-  "startTime": 120.0,
-  "endTime": 180.0,
-  "fullTranscript": [
-    { "start": 120.0, "end": 123.5, "text": "Example text..." }
-  ]
-}</pre>
+                <p>Downloads a specific segment of a YouTube video, crops it to 9:16, burns subtitles, mixes background music, and uploads to Supabase.</p>
             </div>
         </div>
     </body>
@@ -142,10 +134,18 @@ app.post('/process-short', async (req, res) => {
         });
         fs.writeFileSync(srtFile, srtContent);
 
-        // 2. DOWNLOAD CLIP (With upgraded anti-bot logic)
-        console.log(`[JOB ${jobId}] Downloading segment...`);
-        // --force-ipv4 and flexible formatting bypasses many Render IP blocks
-        const downloadCmd = `yt-dlp --force-ipv4 -f "bestvideo[height<=1080]+bestaudio/best" --download-sections "*${startTime}-${endTime}" "${youtubeUrl}" -o "${rawVideo}"`;
+        // 2. DOWNLOAD CLIP (THE ULTIMATE ANTI-BOT ENGINE)
+        console.log(`[JOB ${jobId}] Downloading segment (Bypassing Bot Checks)...`);
+        
+        // Auto-detect if user uploaded a cookies.txt file for hardcore bot bypassing
+        const cookiesPath = path.join(__dirname, 'cookies.txt');
+        const cookieArg = fs.existsSync(cookiesPath) ? `--cookies "${cookiesPath}"` : '';
+
+        // The Bulletproof Command:
+        // - rm-cache-dir: Clears old broken tokens
+        // - js-runtimes node: Uses Node.js to solve YouTube's hidden math puzzles
+        // - extractor-args: Spoofs an Android device API instead of a web browser
+        const downloadCmd = `yt-dlp --rm-cache-dir ${cookieArg} --js-runtimes node --extractor-args "youtube:player_client=android,web" -f "bestvideo[height<=1080]+bestaudio/best" --download-sections "*${startTime}-${endTime}" "${youtubeUrl}" -o "${rawVideo}"`;
         
         exec(downloadCmd, { maxBuffer: 1024 * 1024 * 10 }, async (dlError, stdout, stderr) => {
             if (dlError) {
@@ -166,7 +166,7 @@ app.post('/process-short', async (req, res) => {
                 const files = fs.readdirSync(bgmDir).filter(f => f.endsWith('.mp3'));
                 if (files.length > 0) {
                     const randomBgm = path.join(bgmDir, files[Math.floor(Math.random() * files.length)]);
-                    console.log(`[JOB ${jobId}] Applying BGM: ${randomBgm}`);
+                    console.log(`[JOB ${jobId}] Applying Background Music: ${path.basename(randomBgm)}`);
                     bgmCommand = `-stream_loop -1 -i "${randomBgm}"`;
                     audioFilter = `-filter_complex "[0:a]volume=1.0[main];[1:a]volume=0.10[bgm];[main][bgm]amix=inputs=2:duration=first:dropout_transition=0" -c:a aac`;
                 }
@@ -174,7 +174,7 @@ app.post('/process-short', async (req, res) => {
 
             console.log(`[JOB ${jobId}] Composing Video (Colors: ${bgColor}, ${borderColor})...`);
             
-            // Render Free Tier trick: -preset ultrafast uses less RAM to prevent OOM crashes
+            // Scaled to perfectly fit TikTok/Shorts 9:16 ratio without crashing Render's Free RAM
             const videoFilter = `-vf "scale=1000:-1:force_original_aspect_ratio=decrease,pad=1020:ih+20:(ow-iw)/2:(oh-ih)/2:color='${borderColor}',pad=1080:1920:(ow-iw)/2:(oh-ih)/2:color='${bgColor}',subtitles=${srtFile}:force_style='Fontname=Liberation Sans,FontSize=24,PrimaryColour=&H00FFFF,Outline=1,Shadow=2,MarginV=120'"`;
 
             const ffmpegCmd = `ffmpeg -i "${rawVideo}" ${bgmCommand} ${videoFilter} ${audioFilter} -c:v libx264 -preset ultrafast -shortest "${finalVideo}"`;
@@ -187,7 +187,7 @@ app.post('/process-short', async (req, res) => {
                 }
 
                 // 4. UPLOAD TO SUPABASE
-                console.log(`[JOB ${jobId}] Uploading to Supabase...`);
+                console.log(`[JOB ${jobId}] Uploading to Supabase bucket 'shorts'...`);
                 try {
                     const videoBuffer = fs.readFileSync(finalVideo);
                     const { data, error } = await supabase.storage
