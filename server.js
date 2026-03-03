@@ -26,7 +26,7 @@ app.use(express.json({ limit: '100mb' }));
 // ---------------------------------------------------------
 const BACKGROUND_COLORS = ['#0f172a', '#1e1b4b', '#2e1065', '#27272a', '#052e16', '#171717'];
 const BORDER_COLORS = ['#38bdf8', '#a78bfa', '#f472b6', '#fbbf24', '#34d399', '#f87171'];
-const processQueue = new Map(); // Simple in-memory queue to track jobs
+const processQueue = new Map();
 
 function formatSrtTime(seconds) {
     const date = new Date(Math.max(0, seconds) * 1000);
@@ -53,14 +53,13 @@ app.get('/', (req, res) => {
     const isSupabaseConnected = supabase !== null;
     const hasCookies = fs.existsSync(path.join(__dirname, 'cookies.txt'));
     
-    // Render the Dashboard UI...
     const html = `
     <!DOCTYPE html>
     <html lang="en">
     <head>
         <meta charset="UTF-8">
         <meta name="viewport" content="width=device-width, initial-scale=1.0">
-        <title>Viral Engine V6 Dashboard</title>
+        <title>Viral Engine V7 Dashboard</title>
         <style>
             body { font-family: -apple-system, BlinkMacSystemFont, sans-serif; background-color: #0d1117; color: #c9d1d9; padding: 40px; }
             .container { max-width: 800px; margin: auto; background-color: #161b22; padding: 30px; border-radius: 12px; border: 1px solid #30363d; }
@@ -73,16 +72,12 @@ app.get('/', (req, res) => {
     </head>
     <body>
         <div class="container">
-            <h1>🚀 Viral Engine V6 (Async Queued)</h1>
+            <h1>🚀 Viral Engine V7 (Smart Bot-Bypass)</h1>
             <div class="card">
                 <h3>Status</h3>
                 <p>Core: <span class="badge ok">Online</span></p>
                 <p>Supabase: ${isSupabaseConnected ? '<span class="badge ok">Configured</span>' : '<span class="badge warn">Missing Keys</span>'}</p>
-                <p>Anti-Bot: ${hasCookies ? '<span class="badge ok">Active (cookies.txt)</span>' : '<span class="badge warn">Inactive (Android Spoof)</span>'}</p>
-            </div>
-            <div class="card">
-                <h3>Check Job Status</h3>
-                <p>Use <code>GET /status/:jobId</code> to see progress.</p>
+                <p>Anti-Bot Mode: ${hasCookies ? '<span class="badge ok">Desktop Cookies (Active)</span>' : '<span class="badge warn">Android Spoofing (Active)</span>'}</p>
             </div>
         </div>
     </body>
@@ -91,12 +86,9 @@ app.get('/', (req, res) => {
     res.send(html);
 });
 
-// Endpoint to check job status (crucial for n8n or client apps)
 app.get('/status/:jobId', (req, res) => {
     const job = processQueue.get(req.params.jobId);
-    if (!job) {
-        return res.status(404).json({ error: 'Job ID not found or expired.' });
-    }
+    if (!job) return res.status(404).json({ error: 'Job ID not found or expired.' });
     res.json(job);
 });
 
@@ -111,17 +103,14 @@ app.post('/process-short', async (req, res) => {
         return res.status(400).json({ error: 'Missing payload or Supabase setup.' });
     }
 
-    // Instantly respond to prevent Cloudflare Timeout
     res.status(202).json({
         message: 'Job accepted. Processing in background.',
         jobId: jobId,
         statusUrl: `https://${req.get('host')}/status/${jobId}`
     });
 
-    // Start background work
     processQueue.set(jobId, { status: 'Processing started', url: null });
     
-    // File Paths
     const srtFile = path.join(__dirname, `sub_${jobId}.srt`);
     const rawVideo = path.join(__dirname, `raw_${jobId}.mp4`);
     const finalVideo = path.join(__dirname, `final_${jobId}.mp4`);
@@ -143,10 +132,21 @@ app.post('/process-short', async (req, res) => {
         });
         fs.writeFileSync(srtFile, srtContent);
 
-        // 2. Download Clip
+        // 2. SMART DOWNLOAD ENGINE
         const cookiesPath = path.join(__dirname, 'cookies.txt');
-        const cookieArg = fs.existsSync(cookiesPath) ? `--cookies "${cookiesPath}"` : '';
-        const downloadCmd = `yt-dlp --rm-cache-dir ${cookieArg} --js-runtimes node --extractor-args "youtube:player_client=android,web" -f "bestvideo[height<=1080]+bestaudio/best" --download-sections "*${startTime}-${endTime}" "${youtubeUrl}" -o "${rawVideo}"`;
+        const hasCookies = fs.existsSync(cookiesPath);
+        
+        let downloadCmd = '';
+        
+        if (hasCookies) {
+            console.log(`[JOB ${jobId}] Using Cookie Authentication Mode...`);
+            // STRICTLY uses cookies, drops the Android disguise to prevent clashes, highly flexible format fallback
+            downloadCmd = `yt-dlp --rm-cache-dir --cookies "${cookiesPath}" -f "bestvideo[ext=mp4]+bestaudio[ext=m4a]/b" --download-sections "*${startTime}-${endTime}" "${youtubeUrl}" -o "${rawVideo}"`;
+        } else {
+            console.log(`[JOB ${jobId}] Using Android Spoofing Mode...`);
+            // Uses Android spoofing ONLY if cookies aren't present
+            downloadCmd = `yt-dlp --rm-cache-dir --js-runtimes node --extractor-args "youtube:player_client=android,web" -f "bestvideo[ext=mp4]+bestaudio[ext=m4a]/b" --download-sections "*${startTime}-${endTime}" "${youtubeUrl}" -o "${rawVideo}"`;
+        }
         
         exec(downloadCmd, { maxBuffer: 1024 * 1024 * 10 }, async (dlError, stdout, stderr) => {
             if (dlError) {
@@ -155,7 +155,9 @@ app.post('/process-short', async (req, res) => {
                 return cleanupFiles([srtFile, rawVideo]);
             }
 
-            // 3. Render Final Video (Optimized)
+            console.log(`[JOB ${jobId}] Download successful. Starting render...`);
+
+            // 3. Render Final Video
             const bgColor = BACKGROUND_COLORS[Math.floor(Math.random() * BACKGROUND_COLORS.length)];
             const borderColor = BORDER_COLORS[Math.floor(Math.random() * BORDER_COLORS.length)];
             
@@ -172,7 +174,6 @@ app.post('/process-short', async (req, res) => {
                 }
             }
 
-            // Highly optimized command to render quickly (preset veryfast, lower thread count)
             const videoFilter = `-vf "scale=1000:-1:force_original_aspect_ratio=decrease,pad=1020:ih+20:(ow-iw)/2:(oh-ih)/2:color='${borderColor}',pad=1080:1920:(ow-iw)/2:(oh-ih)/2:color='${bgColor}',subtitles=${srtFile}:force_style='Fontname=Liberation Sans,FontSize=24,PrimaryColour=&H00FFFF,Outline=1,Shadow=2,MarginV=120'"`;
             const ffmpegCmd = `ffmpeg -y -i "${rawVideo}" ${bgmCommand} ${videoFilter} ${audioFilter} -c:v libx264 -preset veryfast -crf 28 -threads 2 -shortest "${finalVideo}"`;
 
@@ -193,11 +194,9 @@ app.post('/process-short', async (req, res) => {
                     const { data: publicUrlData } = supabase.storage.from('shorts').getPublicUrl(finalFileName);
                     console.log(`[JOB ${jobId}] Finished: ${publicUrlData.publicUrl}`);
 
-                    // Update Queue with Final URL
                     processQueue.set(jobId, { status: 'Completed', url: publicUrlData.publicUrl });
                     cleanupFiles([srtFile, rawVideo, finalVideo]);
 
-                    // Free memory tracking after 1 hour
                     setTimeout(() => processQueue.delete(jobId), 3600000);
 
                 } catch (supaError) {
@@ -216,5 +215,4 @@ app.post('/process-short', async (req, res) => {
 });
 
 const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => console.log(`🚀 Viral Engine V6 Online on port ${PORT}`));
-                                             
+app.listen(PORT, () => console.log(`🚀 Viral Engine V7 Online on port ${PORT}`));
