@@ -45,7 +45,7 @@ function cleanupFiles(files) {
 }
 
 // ---------------------------------------------------------
-// V12 CYBER-DASHBOARD (GET /)
+// V12.1 CYBER-DASHBOARD (GET /)
 // ---------------------------------------------------------
 app.get('/', (req, res) => {
     const isSupabaseConnected = supabase !== null;
@@ -56,7 +56,7 @@ app.get('/', (req, res) => {
     <head>
         <meta charset="UTF-8">
         <meta name="viewport" content="width=device-width, initial-scale=1.0">
-        <title>NEXUS V12 Engine</title>
+        <title>NEXUS V12.1 Engine</title>
         <script src="https://cdn.tailwindcss.com"></script>
         <style>
             body { background-color: #050505; }
@@ -68,8 +68,8 @@ app.get('/', (req, res) => {
         <div class="max-w-5xl mx-auto space-y-6">
             
             <header class="border-b border-sky-900 pb-4 mb-8">
-                <h1 class="text-4xl font-black text-sky-400 neon-text tracking-tighter">NEXUS V12</h1>
-                <p class="text-gray-500 text-sm mt-1">External API Integration & Cloud Streaming</p>
+                <h1 class="text-4xl font-black text-sky-400 neon-text tracking-tighter">NEXUS V12.1</h1>
+                <p class="text-gray-500 text-sm mt-1">Multi-Node API Mesh & Cloud Streaming</p>
             </header>
 
             <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
@@ -78,7 +78,7 @@ app.get('/', (req, res) => {
                     <ul class="space-y-3 text-sm">
                         <li class="flex justify-between"><span>Engine Status:</span> <span class="text-green-400 font-bold">ONLINE</span></li>
                         <li class="flex justify-between"><span>Supabase Node:</span> ${isSupabaseConnected ? '<span class="text-green-400 font-bold">CONNECTED</span>' : '<span class="text-red-500 font-bold">DISCONNECTED</span>'}</li>
-                        <li class="flex justify-between"><span>Extractor:</span> <span class="text-purple-400 font-bold">COBALT API</span></li>
+                        <li class="flex justify-between"><span>Extractor:</span> <span class="text-purple-400 font-bold">COBALT MESH (v10)</span></li>
                     </ul>
                 </div>
 
@@ -136,8 +136,8 @@ app.get('/', (req, res) => {
                     endTime: parseFloat(document.getElementById('endTime').value),
                     watermarkText: document.getElementById('watermark').value,
                     fullTranscript: [
-                        { start: 730.0, end: 734.0, text: "V12 External API engaged." },
-                        { start: 734.5, end: 737.0, text: "Streaming data straight from the cloud." },
+                        { start: 730.0, end: 734.0, text: "V12.1 Multi-Node Mesh activated." },
+                        { start: 734.5, end: 737.0, text: "Streaming v10 data directly from cloud." },
                         { start: 737.5, end: 740.0, text: "Bypassing YouTube blocks flawlessly." }
                     ]
                 };
@@ -204,12 +204,12 @@ app.get('/status/:jobId', (req, res) => {
 });
 
 // ---------------------------------------------------------
-// ASYNC PROCESS ROUTE (V12 EXTERNAL API LOGIC)
+// ASYNC PROCESS ROUTE (V12.1 COBALT MESH LOGIC)
 // ---------------------------------------------------------
 app.post('/process-short', async (req, res) => {
     const { youtubeUrl, startTime, endTime, fullTranscript, watermarkText } = req.body;
     const jobId = uuidv4().substring(0, 8);
-    const finalWatermark = watermarkText || 'Viral Engine V12';
+    const finalWatermark = watermarkText || 'Viral Engine V12.1';
 
     if (!youtubeUrl || startTime === undefined || !fullTranscript || !supabase) {
         return res.status(400).json({ error: 'Missing payload or Supabase setup.' });
@@ -239,34 +239,63 @@ app.post('/process-short', async (req, res) => {
         });
         fs.writeFileSync(srtFile, srtContent);
 
-        // 2. Fetch Direct Media URL from External Cobalt API (No yt-dlp used)
-        processQueue.set(jobId, { status: 'Negotiating with external Cobalt API...' });
+        // 2. Fetch Direct Media URL from External Cobalt Mesh (V10 APIs)
+        let directCloudUrl = null;
+        let apiErrorText = 'All nodes failed to respond.';
         
-        // Native Node.js fetch request to the public API
-        const cobaltResponse = await fetch('https://api.cobalt.tools/api/json', {
-            method: 'POST',
-            headers: {
-                'Accept': 'application/json',
-                'Content-Type': 'application/json',
-                'Origin': 'https://cobalt.tools',
-                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)'
-            },
-            body: JSON.stringify({
-                url: youtubeUrl,
-                vQuality: "1080",
-                disableMetadata: true
-            })
-        });
+        // Multi-Node Fallback System
+        const apiInstances = [
+            'https://api.cobalt.tools/',
+            'https://co.wuk.sh/',
+            'https://api.timelessnesses.me/'
+        ];
 
-        const cobaltData = await cobaltResponse.json();
+        for (const apiUrl of apiInstances) {
+            try {
+                processQueue.set(jobId, { status: `Pinging node: ${apiUrl.split('/')[2]}...` });
+                
+                // V10 Updated Endpoint & Body ('videoQuality' instead of 'vQuality')
+                const cobaltResponse = await fetch(apiUrl, {
+                    method: 'POST',
+                    headers: {
+                        'Accept': 'application/json',
+                        'Content-Type': 'application/json',
+                        'Origin': 'https://cobalt.tools',
+                        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
+                    },
+                    body: JSON.stringify({
+                        url: youtubeUrl,
+                        videoQuality: "1080",
+                        disableMetadata: true
+                    })
+                });
+                
+                const cobaltData = await cobaltResponse.json();
+                
+                // Check if this specific API node returned an error
+                if (cobaltData.status === 'error') {
+                     apiErrorText = cobaltData.text || 'Unknown Node Error';
+                     console.log(`[JOB ${jobId}] Node ${apiUrl} returned error: ${apiErrorText}`);
+                     continue; // Jump to the next API in the list
+                }
+                
+                // If we got the video URL, break out of the loop!
+                if (cobaltData.url) {
+                    directCloudUrl = cobaltData.url;
+                    break; 
+                }
+            } catch (e) {
+                console.log(`[JOB ${jobId}] Failed to connect to ${apiUrl}: ${e.message}`);
+            }
+        }
 
-        if (cobaltData.status === 'error' || !cobaltData.url) {
-            console.error(`[JOB ${jobId}] Cobalt Error:`, cobaltData);
-            processQueue.set(jobId, { status: 'Failed: External API Error', error: cobaltData.text || 'Cobalt failed to provide a URL.' });
+        // If ALL nodes failed
+        if (!directCloudUrl) {
+            console.error(`[JOB ${jobId}] Mesh failed. Last error:`, apiErrorText);
+            processQueue.set(jobId, { status: 'Failed: External API Error', error: apiErrorText });
             return cleanupFiles([srtFile]);
         }
 
-        const directCloudUrl = cobaltData.url;
         console.log(`[JOB ${jobId}] Received cloud URL. Starting FFmpeg stream...`);
         processQueue.set(jobId, { status: 'Cloud Streaming & Applying Filters...' });
 
@@ -286,7 +315,6 @@ app.post('/process-short', async (req, res) => {
         const bgColor = BACKGROUND_COLORS[Math.floor(Math.random() * BACKGROUND_COLORS.length)];
         const borderColor = BORDER_COLORS[Math.floor(Math.random() * BORDER_COLORS.length)];
 
-        // -ss placed BEFORE -i allows incredibly fast seeking over the cloud
         const videoFilter = `-vf "scale=1000:-1:force_original_aspect_ratio=decrease,pad=1080:1920:(ow-iw)/2:(oh-ih)/2:color='#0f172a',drawtext=text='${finalWatermark}':fontcolor=white@0.4:fontsize=46:x=(w-text_w)/2:y=150,subtitles=${srtFile}:force_style='Fontname=Liberation Sans,FontSize=26,PrimaryColour=&H00FFFF,Outline=1,Shadow=2,MarginV=250'"`;
         
         // The Magic Command: It slices the video over the internet without downloading the whole file
@@ -330,4 +358,4 @@ app.post('/process-short', async (req, res) => {
 });
 
 const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => console.log(`🚀 NEXUS V12 Online on port ${PORT}`));
+app.listen(PORT, () => console.log(`🚀 NEXUS V12.1 Online on port ${PORT}`));
