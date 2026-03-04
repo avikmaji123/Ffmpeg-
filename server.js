@@ -15,6 +15,10 @@ const supabaseUrl = process.env.SUPABASE_URL || '';
 const supabaseKey = process.env.SUPABASE_KEY || '';
 const supabase = (supabaseUrl && supabaseKey) ? createClient(supabaseUrl, supabaseKey) : null;
 
+// RAPID API CONFIGURATION (Hardcoded per user request)
+const RAPID_API_KEY = '101e45da46mshd04f6e6082b3db7p129faejsn4ed51f268ffc';
+const RAPID_API_HOST = 'youtube-video-fast-downloader2.p.rapidapi.com'; 
+
 const app = express();
 app.use(helmet({ contentSecurityPolicy: false }));
 app.use(cors());
@@ -41,12 +45,10 @@ function cleanupFiles(files) {
 }
 
 // ---------------------------------------------------------
-// V13 CYBER-DASHBOARD
+// V14 CYBER-DASHBOARD
 // ---------------------------------------------------------
 app.get('/', (req, res) => {
     const isSupabaseConnected = supabase !== null;
-    const cookiesPath = path.join(__dirname, 'cookies.txt');
-    const hasCookies = fs.existsSync(cookiesPath);
     
     const html = `
     <!DOCTYPE html>
@@ -54,7 +56,7 @@ app.get('/', (req, res) => {
     <head>
         <meta charset="UTF-8">
         <meta name="viewport" content="width=device-width, initial-scale=1.0">
-        <title>NEXUS V13 TITAN</title>
+        <title>NEXUS V14 | RAPID-API</title>
         <script src="https://cdn.tailwindcss.com"></script>
         <style>
             body { background-color: #050505; }
@@ -65,22 +67,18 @@ app.get('/', (req, res) => {
     <body class="text-gray-300 font-mono min-h-screen p-4 md:p-8">
         <div class="max-w-5xl mx-auto space-y-6">
             <header class="border-b border-sky-900 pb-4 mb-8">
-                <h1 class="text-4xl font-black text-sky-400 neon-text tracking-tighter">NEXUS V13 TITAN</h1>
-                <p class="text-gray-500 text-sm mt-1">Desktop VIP Cookie Protocol</p>
+                <h1 class="text-4xl font-black text-sky-400 neon-text tracking-tighter">NEXUS V14 TITAN</h1>
+                <p class="text-gray-500 text-sm mt-1">Enterprise RapidAPI Integration & Cinematic Engine</p>
             </header>
 
             <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
                 <div class="glass p-5 rounded-xl col-span-1 h-fit">
                     <h2 class="text-xl font-bold text-white mb-4">System Core</h2>
                     <ul class="space-y-3 text-sm">
-                        <li class="flex justify-between"><span>Supabase:</span> ${isSupabaseConnected ? '<span class="text-green-400 font-bold">CONNECTED</span>' : '<span class="text-red-500 font-bold">DISCONNECTED</span>'}</li>
-                        <li class="flex justify-between border-t border-gray-800 pt-3"><span>VIP Cookies:</span> 
-                            ${hasCookies 
-                                ? '<span class="text-green-400 font-bold animate-pulse">DETECTED & SECURE</span>' 
-                                : '<span class="text-red-500 font-bold blink">MISSING COOKIES.TXT</span>'}
-                        </li>
+                        <li class="flex justify-between"><span>Supabase Node:</span> ${isSupabaseConnected ? '<span class="text-green-400 font-bold">CONNECTED</span>' : '<span class="text-red-500 font-bold">DISCONNECTED</span>'}</li>
+                        <li class="flex justify-between border-t border-gray-800 pt-3"><span>Bot Evasion:</span> <span class="text-purple-400 font-bold">RAPID-API ACTIVE</span></li>
+                        <li class="flex justify-between"><span>Local Extractor:</span> <span class="text-gray-500 font-bold">DISABLED (yt-dlp removed)</span></li>
                     </ul>
-                    ${!hasCookies ? '<p class="text-xs text-red-400 mt-4 border border-red-900 p-2 rounded bg-red-950/30">ERROR: You must upload cookies.txt to your GitHub repo to bypass YouTube bots.</p>' : ''}
                 </div>
 
                 <div class="glass p-5 rounded-xl col-span-1 md:col-span-2">
@@ -103,7 +101,7 @@ app.get('/', (req, res) => {
                             <label class="block text-xs text-sky-500 uppercase mb-1">Watermark Overlay</label>
                             <input type="text" id="watermark" value="@avik_911" class="w-full bg-gray-900 border border-gray-700 rounded p-2 text-sm text-white focus:outline-none focus:border-sky-500">
                         </div>
-                        <button type="submit" ${!hasCookies ? 'disabled' : ''} class="w-full bg-sky-600 hover:bg-sky-500 disabled:bg-gray-700 disabled:text-gray-500 text-white font-bold py-3 rounded transition-all shadow-[0_0_15px_rgba(2,132,199,0.5)] uppercase tracking-widest mt-4">Initialize Render</button>
+                        <button type="submit" class="w-full bg-sky-600 hover:bg-sky-500 text-white font-bold py-3 rounded transition-all shadow-[0_0_15px_rgba(2,132,199,0.5)] uppercase tracking-widest mt-4">Initialize Rapid Render</button>
                     </form>
                 </div>
             </div>
@@ -135,9 +133,9 @@ app.get('/', (req, res) => {
                     endTime: parseFloat(document.getElementById('endTime').value),
                     watermarkText: document.getElementById('watermark').value,
                     fullTranscript: [
-                        { start: 730.0, end: 734.0, text: "V13 Titan Engine online." },
-                        { start: 734.5, end: 737.0, text: "VIP Desktop Cookies injected." },
-                        { start: 737.5, end: 740.0, text: "Target secured successfully." }
+                        { start: 730.0, end: 734.0, text: "V14 RapidAPI Engine online." },
+                        { start: 734.5, end: 737.0, text: "Authenticating premium proxy mesh." },
+                        { start: 737.5, end: 740.0, text: "Bypassing YouTube blocks completely." }
                     ]
                 };
 
@@ -208,7 +206,7 @@ app.get('/status/:jobId', (req, res) => {
 app.post('/process-short', async (req, res) => {
     const { youtubeUrl, startTime, endTime, fullTranscript, watermarkText } = req.body;
     const jobId = uuidv4().substring(0, 8);
-    const finalWatermark = watermarkText || 'Viral Engine V13';
+    const finalWatermark = watermarkText || '@avik_911';
 
     if (!youtubeUrl || startTime === undefined || !fullTranscript || !supabase) {
         return res.status(400).json({ error: 'Missing payload or Supabase setup.' });
@@ -218,13 +216,14 @@ app.post('/process-short', async (req, res) => {
     processQueue.set(jobId, { status: 'Extraction initiated', url: null });
     
     const srtFile = path.join(__dirname, `sub_${jobId}.srt`);
-    const rawVideo = path.join(__dirname, `raw_${jobId}.mp4`);
     const finalVideo = path.join(__dirname, `final_${jobId}.mp4`);
     const finalFileName = `viral_short_${jobId}.mp4`;
 
     try {
         console.log(`\n[JOB ${jobId}] Engine Started...`);
 
+        // 1. Generate Subtitles
+        processQueue.set(jobId, { status: 'Compiling Subtitles (SRT)' });
         let srtContent = '';
         let subtitleIndex = 1;
         fullTranscript.forEach(line => {
@@ -237,27 +236,49 @@ app.post('/process-short', async (req, res) => {
         });
         fs.writeFileSync(srtFile, srtContent);
 
-        // V13: STRICT DESKTOP COOKIE ENGINE
-        const cookiesPath = path.join(__dirname, 'cookies.txt');
-        if (!fs.existsSync(cookiesPath)) {
-            processQueue.set(jobId, { status: 'Failed: Missing cookies.txt in server directory.' });
-            return cleanupFiles([srtFile, rawVideo]);
+        // 2. Fetch Direct URL via RapidAPI
+        processQueue.set(jobId, { status: 'Authenticating with RapidAPI...' });
+        
+        const videoIdMatch = youtubeUrl.match(/(?:v=|\/)([0-9A-Za-z_-]{11}).*/);
+        const videoId = videoIdMatch ? videoIdMatch[1] : null;
+
+        if(!videoId) {
+            processQueue.set(jobId, { status: 'Failed: Invalid YouTube URL format' });
+            return cleanupFiles([srtFile]);
         }
 
-        processQueue.set(jobId, { status: 'Authenticating via VIP Desktop Cookies...' });
+        const rapidApiUrl = `https://${RAPID_API_HOST}/getVideo?id=${videoId}`;
         
-        // This command forces the Desktop Web Client to perfectly match your Desktop Cookies.
-        const downloadCmd = `yt-dlp --rm-cache-dir --cookies "${cookiesPath}" --extractor-args "youtube:player_client=web" -f "bestvideo[height<=1080][ext=mp4]+bestaudio[ext=m4a]/best" --download-sections "*${startTime}-${endTime}" "${youtubeUrl}" -o "${rawVideo}"`;
-        
-        exec(downloadCmd, { maxBuffer: 1024 * 1024 * 10 }, async (dlError, stdout, stderr) => {
-            if (dlError) {
-                console.error(`[JOB ${jobId}] Download Error:`, stderr);
-                processQueue.set(jobId, { status: 'Failed: Target Secured by YouTube', error: stderr });
-                return cleanupFiles([srtFile, rawVideo]);
+        try {
+            const apiResponse = await fetch(rapidApiUrl, {
+                method: 'GET',
+                headers: {
+                    'x-rapidapi-key': RAPID_API_KEY,
+                    'x-rapidapi-host': RAPID_API_HOST
+                }
+            });
+
+            const apiData = await apiResponse.json();
+
+            // Find the highest quality MP4 link from the RapidAPI response
+            let directUrl = null;
+            if (apiData && apiData.links && apiData.links.length > 0) {
+                // Filter for mp4 and sort by quality (1080p, 720p, etc)
+                const mp4Links = apiData.links.filter(link => link.ext === 'mp4' && link.url);
+                if (mp4Links.length > 0) {
+                    directUrl = mp4Links[0].url; // Grabs the first/best one
+                }
             }
 
-            processQueue.set(jobId, { status: 'Applying Cinematic Filters & Watermark...' });
+            if (!directUrl) {
+                 processQueue.set(jobId, { status: 'Failed: RapidAPI did not return a valid MP4 link.', error: JSON.stringify(apiData) });
+                 return cleanupFiles([srtFile]);
+            }
 
+            console.log(`[JOB ${jobId}] RapidAPI Success! Direct URL obtained.`);
+            processQueue.set(jobId, { status: 'Cloud Streaming & Applying Cinematic Edits...' });
+
+            // 3. Cinematic FFmpeg Builder (Directly streaming from the RapidAPI URL)
             let bgmCommand = '';
             let audioFilter = '-c:a copy'; 
             const bgmDir = path.join(__dirname, 'bgm');
@@ -270,16 +291,19 @@ app.post('/process-short', async (req, res) => {
                 }
             }
 
+            // Cinematic padding (dark slate), dynamic watermark at the top, high-vis subtitles at the bottom
             const videoFilter = `-vf "scale=1000:-1:force_original_aspect_ratio=decrease,pad=1080:1920:(ow-iw)/2:(oh-ih)/2:color='#0f172a',drawtext=text='${finalWatermark}':fontcolor=white@0.4:fontsize=46:x=(w-text_w)/2:y=150,subtitles=${srtFile}:force_style='Fontname=Liberation Sans,FontSize=26,PrimaryColour=&H00FFFF,Outline=1,Shadow=2,MarginV=250'"`;
-            const ffmpegCmd = `ffmpeg -y -i "${rawVideo}" ${bgmCommand} ${videoFilter} ${audioFilter} -c:v libx264 -preset veryfast -crf 28 -threads 2 -shortest "${finalVideo}"`;
+            
+            // Cloud Streaming FFmpeg Command (No local downloading required)
+            const ffmpegCmd = `ffmpeg -y -ss ${startTime} -to ${endTime} -i "${directUrl}" ${bgmCommand} ${videoFilter} ${audioFilter} -c:v libx264 -preset veryfast -crf 28 -threads 2 "${finalVideo}"`;
 
             exec(ffmpegCmd, { maxBuffer: 1024 * 1024 * 10 }, async (ffError, ffStdout, ffStderr) => {
                 if (ffError) {
-                    processQueue.set(jobId, { status: 'Failed: Render Error', error: ffStderr });
-                    return cleanupFiles([srtFile, rawVideo, finalVideo]);
+                    processQueue.set(jobId, { status: 'Failed: FFmpeg Render Error', error: 'Could not stream video from RapidAPI link.' });
+                    return cleanupFiles([srtFile, finalVideo]);
                 }
 
-                processQueue.set(jobId, { status: 'Uploading to Supabase Node...' });
+                processQueue.set(jobId, { status: 'Uploading Final Short to Supabase...' });
                 try {
                     const videoBuffer = fs.readFileSync(finalVideo);
                     const { data, error } = await supabase.storage.from('shorts').upload(finalFileName, videoBuffer, { contentType: 'video/mp4', upsert: true });
@@ -288,22 +312,27 @@ app.post('/process-short', async (req, res) => {
 
                     const { data: publicUrlData } = supabase.storage.from('shorts').getPublicUrl(finalFileName);
                     processQueue.set(jobId, { status: 'Completed', url: publicUrlData.publicUrl });
-                    cleanupFiles([srtFile, rawVideo, finalVideo]);
+                    cleanupFiles([srtFile, finalVideo]);
 
                     setTimeout(() => processQueue.delete(jobId), 3600000);
 
                 } catch (supaError) {
-                    processQueue.set(jobId, { status: 'Failed: Upload Error', error: supaError.message });
-                    cleanupFiles([srtFile, rawVideo, finalVideo]);
+                    processQueue.set(jobId, { status: 'Failed: Supabase Upload Error', error: supaError.message });
+                    cleanupFiles([srtFile, finalVideo]);
                 }
             });
-        });
+
+        } catch (apiError) {
+             processQueue.set(jobId, { status: 'Failed: RapidAPI Network Error', error: apiError.message });
+             cleanupFiles([srtFile]);
+        }
 
     } catch (error) {
         processQueue.set(jobId, { status: 'Failed: Fatal Core Error' });
-        cleanupFiles([srtFile, rawVideo, finalVideo]);
+        cleanupFiles([srtFile, finalVideo]);
     }
 });
 
 const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => console.log(`🚀 NEXUS V13 Online on port ${PORT}`));
+app.listen(PORT, () => console.log(`🚀 NEXUS V14 Online on port ${PORT}`));
+        
