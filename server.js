@@ -45,10 +45,11 @@ function cleanupFiles(files) {
 }
 
 // ---------------------------------------------------------
-// V10 CYBER-DASHBOARD (GET /)
+// V11 CYBER-DASHBOARD (GET /)
 // ---------------------------------------------------------
 app.get('/', (req, res) => {
     const isSupabaseConnected = supabase !== null;
+    const hasCookies = fs.existsSync(path.join(__dirname, 'cookies.txt'));
     
     const html = `
     <!DOCTYPE html>
@@ -56,7 +57,7 @@ app.get('/', (req, res) => {
     <head>
         <meta charset="UTF-8">
         <meta name="viewport" content="width=device-width, initial-scale=1.0">
-        <title>NEXUS V10 Engine</title>
+        <title>NEXUS V11 Engine</title>
         <script src="https://cdn.tailwindcss.com"></script>
         <style>
             body { background-color: #050505; }
@@ -68,7 +69,7 @@ app.get('/', (req, res) => {
         <div class="max-w-5xl mx-auto space-y-6">
             
             <header class="border-b border-sky-900 pb-4 mb-8">
-                <h1 class="text-4xl font-black text-sky-400 neon-text tracking-tighter">NEXUS V10</h1>
+                <h1 class="text-4xl font-black text-sky-400 neon-text tracking-tighter">NEXUS V11</h1>
                 <p class="text-gray-500 text-sm mt-1">Automated Video Extraction & Rendering Pipeline</p>
             </header>
 
@@ -78,8 +79,7 @@ app.get('/', (req, res) => {
                     <ul class="space-y-3 text-sm">
                         <li class="flex justify-between"><span>Engine Status:</span> <span class="text-green-400 font-bold">ONLINE</span></li>
                         <li class="flex justify-between"><span>Supabase Node:</span> ${isSupabaseConnected ? '<span class="text-green-400 font-bold">CONNECTED</span>' : '<span class="text-red-500 font-bold">DISCONNECTED</span>'}</li>
-                        <li class="flex justify-between"><span>Bot Evasion:</span> <span class="text-yellow-400 font-bold">GHOST MODE</span></li>
-                        <li class="flex justify-between"><span>Active Jobs:</span> <span id="active-jobs" class="text-sky-400 font-bold">0</span></li>
+                        <li class="flex justify-between"><span>Bot Evasion:</span> ${hasCookies ? '<span class="text-green-400 font-bold animate-pulse">VIP COOKIES ACTIVE</span>' : '<span class="text-red-500 font-bold">FAILED (NEEDS COOKIES.TXT)</span>'}</li>
                     </ul>
                 </div>
 
@@ -137,8 +137,8 @@ app.get('/', (req, res) => {
                     endTime: parseFloat(document.getElementById('endTime').value),
                     watermarkText: document.getElementById('watermark').value,
                     fullTranscript: [
-                        { start: 730.0, end: 734.0, text: "Nexus V10 Engine initialized." },
-                        { start: 734.5, end: 737.0, text: "Applying custom cinematic formatting." },
+                        { start: 730.0, end: 734.0, text: "Nexus V11 Engine initialized." },
+                        { start: 734.5, end: 737.0, text: "Bypassing YouTube security blocks." },
                         { start: 737.5, end: 740.0, text: "Upload sequence engaged." }
                     ]
                 };
@@ -210,7 +210,7 @@ app.get('/status/:jobId', (req, res) => {
 app.post('/process-short', async (req, res) => {
     const { youtubeUrl, startTime, endTime, fullTranscript, watermarkText } = req.body;
     const jobId = uuidv4().substring(0, 8);
-    const finalWatermark = watermarkText || 'Viral Engine V10';
+    const finalWatermark = watermarkText || 'Viral Engine V11';
 
     if (!youtubeUrl || startTime === undefined || !fullTranscript || !supabase) {
         return res.status(400).json({ error: 'Missing payload or Supabase setup.' });
@@ -239,9 +239,19 @@ app.post('/process-short', async (req, res) => {
         });
         fs.writeFileSync(srtFile, srtContent);
 
-        // V9 Ghost Mode Downloader
-        processQueue.set(jobId, { status: 'Bypassing Bot Firewalls' });
-        const downloadCmd = `yt-dlp --rm-cache-dir --js-runtimes node --extractor-args "youtube:player_client=ios,android,tv" -f "bestvideo[height<=1080]+bestaudio/best" --download-sections "*${startTime}-${endTime}" "${youtubeUrl}" -o "${rawVideo}"`;
+        // V11: HARDCOOKIE ENFORCEMENT
+        const cookiesPath = path.join(__dirname, 'cookies.txt');
+        const hasCookies = fs.existsSync(cookiesPath);
+        
+        let downloadCmd = '';
+
+        if (hasCookies) {
+            processQueue.set(jobId, { status: 'Authenticating via VIP Cookies' });
+            downloadCmd = `yt-dlp --rm-cache-dir --cookies "${cookiesPath}" -f "bestvideo[height<=1080]+bestaudio/best" --download-sections "*${startTime}-${endTime}" "${youtubeUrl}" -o "${rawVideo}"`;
+        } else {
+            processQueue.set(jobId, { status: 'Failed: Missing cookies.txt in server.' });
+            return cleanupFiles([srtFile, rawVideo]);
+        }
         
         exec(downloadCmd, { maxBuffer: 1024 * 1024 * 10 }, async (dlError, stdout, stderr) => {
             if (dlError) {
@@ -252,7 +262,7 @@ app.post('/process-short', async (req, res) => {
 
             processQueue.set(jobId, { status: 'Applying Cinematic Filters & Watermark' });
 
-            // V10 CINEMATIC FFMPEG BUILDER
+            // CINEMATIC FFMPEG BUILDER
             let bgmCommand = '';
             let audioFilter = '-c:a copy'; 
             const bgmDir = path.join(__dirname, 'bgm');
@@ -265,7 +275,6 @@ app.post('/process-short', async (req, res) => {
                 }
             }
 
-            // Cinematic padding (dark slate), dynamic watermark at the top, high-vis subtitles at the bottom
             const videoFilter = `-vf "scale=1000:-1:force_original_aspect_ratio=decrease,pad=1080:1920:(ow-iw)/2:(oh-ih)/2:color='#0f172a',drawtext=text='${finalWatermark}':fontcolor=white@0.4:fontsize=46:x=(w-text_w)/2:y=150,subtitles=${srtFile}:force_style='Fontname=Liberation Sans,FontSize=26,PrimaryColour=&H00FFFF,Outline=1,Shadow=2,MarginV=250'"`;
             const ffmpegCmd = `ffmpeg -y -i "${rawVideo}" ${bgmCommand} ${videoFilter} ${audioFilter} -c:v libx264 -preset veryfast -crf 28 -threads 2 -shortest "${finalVideo}"`;
 
@@ -302,4 +311,4 @@ app.post('/process-short', async (req, res) => {
 });
 
 const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => console.log(`🚀 NEXUS V10 Online on port ${PORT}`));
+app.listen(PORT, () => console.log(`🚀 NEXUS V11 Online on port ${PORT}`));
