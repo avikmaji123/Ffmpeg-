@@ -21,9 +21,6 @@ app.use(cors());
 app.use(morgan('dev'));
 app.use(express.json({ limit: '100mb' }));
 
-// ---------------------------------------------------------
-// IN-MEMORY QUEUE
-// ---------------------------------------------------------
 const processQueue = new Map();
 
 function formatSrtTime(seconds) {
@@ -38,17 +35,18 @@ function formatSrtTime(seconds) {
 function cleanupFiles(files) {
     files.forEach(file => {
         if (fs.existsSync(file)) {
-            try { fs.unlinkSync(file); } 
-            catch (err) { console.error(`[CLEANUP ERROR] Failed to delete ${file}`); }
+            try { fs.unlinkSync(file); } catch (err) {}
         }
     });
 }
 
 // ---------------------------------------------------------
-// V12.1 CYBER-DASHBOARD (GET /)
+// V13 CYBER-DASHBOARD
 // ---------------------------------------------------------
 app.get('/', (req, res) => {
     const isSupabaseConnected = supabase !== null;
+    const cookiesPath = path.join(__dirname, 'cookies.txt');
+    const hasCookies = fs.existsSync(cookiesPath);
     
     const html = `
     <!DOCTYPE html>
@@ -56,7 +54,7 @@ app.get('/', (req, res) => {
     <head>
         <meta charset="UTF-8">
         <meta name="viewport" content="width=device-width, initial-scale=1.0">
-        <title>NEXUS V12.1 Engine</title>
+        <title>NEXUS V13 TITAN</title>
         <script src="https://cdn.tailwindcss.com"></script>
         <style>
             body { background-color: #050505; }
@@ -66,24 +64,26 @@ app.get('/', (req, res) => {
     </head>
     <body class="text-gray-300 font-mono min-h-screen p-4 md:p-8">
         <div class="max-w-5xl mx-auto space-y-6">
-            
             <header class="border-b border-sky-900 pb-4 mb-8">
-                <h1 class="text-4xl font-black text-sky-400 neon-text tracking-tighter">NEXUS V12.1</h1>
-                <p class="text-gray-500 text-sm mt-1">Multi-Node API Mesh & Cloud Streaming</p>
+                <h1 class="text-4xl font-black text-sky-400 neon-text tracking-tighter">NEXUS V13 TITAN</h1>
+                <p class="text-gray-500 text-sm mt-1">Desktop VIP Cookie Protocol</p>
             </header>
 
             <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
                 <div class="glass p-5 rounded-xl col-span-1 h-fit">
                     <h2 class="text-xl font-bold text-white mb-4">System Core</h2>
                     <ul class="space-y-3 text-sm">
-                        <li class="flex justify-between"><span>Engine Status:</span> <span class="text-green-400 font-bold">ONLINE</span></li>
-                        <li class="flex justify-between"><span>Supabase Node:</span> ${isSupabaseConnected ? '<span class="text-green-400 font-bold">CONNECTED</span>' : '<span class="text-red-500 font-bold">DISCONNECTED</span>'}</li>
-                        <li class="flex justify-between"><span>Extractor:</span> <span class="text-purple-400 font-bold">COBALT MESH (v10)</span></li>
+                        <li class="flex justify-between"><span>Supabase:</span> ${isSupabaseConnected ? '<span class="text-green-400 font-bold">CONNECTED</span>' : '<span class="text-red-500 font-bold">DISCONNECTED</span>'}</li>
+                        <li class="flex justify-between border-t border-gray-800 pt-3"><span>VIP Cookies:</span> 
+                            ${hasCookies 
+                                ? '<span class="text-green-400 font-bold animate-pulse">DETECTED & SECURE</span>' 
+                                : '<span class="text-red-500 font-bold blink">MISSING COOKIES.TXT</span>'}
+                        </li>
                     </ul>
+                    ${!hasCookies ? '<p class="text-xs text-red-400 mt-4 border border-red-900 p-2 rounded bg-red-950/30">ERROR: You must upload cookies.txt to your GitHub repo to bypass YouTube bots.</p>' : ''}
                 </div>
 
                 <div class="glass p-5 rounded-xl col-span-1 md:col-span-2">
-                    <h2 class="text-xl font-bold text-white mb-4">New Extraction Job</h2>
                     <form id="jobForm" class="space-y-4">
                         <div>
                             <label class="block text-xs text-sky-500 uppercase mb-1">Target URL</label>
@@ -103,13 +103,12 @@ app.get('/', (req, res) => {
                             <label class="block text-xs text-sky-500 uppercase mb-1">Watermark Overlay</label>
                             <input type="text" id="watermark" value="@avik_911" class="w-full bg-gray-900 border border-gray-700 rounded p-2 text-sm text-white focus:outline-none focus:border-sky-500">
                         </div>
-                        <button type="submit" class="w-full bg-sky-600 hover:bg-sky-500 text-white font-bold py-3 rounded transition-all shadow-[0_0_15px_rgba(2,132,199,0.5)] uppercase tracking-widest mt-4">Initialize Render</button>
+                        <button type="submit" ${!hasCookies ? 'disabled' : ''} class="w-full bg-sky-600 hover:bg-sky-500 disabled:bg-gray-700 disabled:text-gray-500 text-white font-bold py-3 rounded transition-all shadow-[0_0_15px_rgba(2,132,199,0.5)] uppercase tracking-widest mt-4">Initialize Render</button>
                     </form>
                 </div>
             </div>
 
             <div id="output-terminal" class="glass p-5 rounded-xl hidden">
-                <h2 class="text-xl font-bold text-white mb-4">Live Tracker</h2>
                 <div class="bg-gray-950 p-4 rounded border border-gray-800 font-mono text-sm">
                     <p id="job-id-display" class="text-gray-500 mb-2"></p>
                     <p id="job-status" class="text-sky-400 animate-pulse">Awaiting initialization...</p>
@@ -136,9 +135,9 @@ app.get('/', (req, res) => {
                     endTime: parseFloat(document.getElementById('endTime').value),
                     watermarkText: document.getElementById('watermark').value,
                     fullTranscript: [
-                        { start: 730.0, end: 734.0, text: "V12.1 Multi-Node Mesh activated." },
-                        { start: 734.5, end: 737.0, text: "Streaming v10 data directly from cloud." },
-                        { start: 737.5, end: 740.0, text: "Bypassing YouTube blocks flawlessly." }
+                        { start: 730.0, end: 734.0, text: "V13 Titan Engine online." },
+                        { start: 734.5, end: 737.0, text: "VIP Desktop Cookies injected." },
+                        { start: 737.5, end: 740.0, text: "Target secured successfully." }
                     ]
                 };
 
@@ -204,29 +203,28 @@ app.get('/status/:jobId', (req, res) => {
 });
 
 // ---------------------------------------------------------
-// ASYNC PROCESS ROUTE (V12.1 COBALT MESH LOGIC)
+// ASYNC PROCESS ROUTE
 // ---------------------------------------------------------
 app.post('/process-short', async (req, res) => {
     const { youtubeUrl, startTime, endTime, fullTranscript, watermarkText } = req.body;
     const jobId = uuidv4().substring(0, 8);
-    const finalWatermark = watermarkText || 'Viral Engine V12.1';
+    const finalWatermark = watermarkText || 'Viral Engine V13';
 
     if (!youtubeUrl || startTime === undefined || !fullTranscript || !supabase) {
         return res.status(400).json({ error: 'Missing payload or Supabase setup.' });
     }
 
-    // Instantly respond to prevent timeout
     res.status(202).json({ message: 'Job accepted.', jobId: jobId });
     processQueue.set(jobId, { status: 'Extraction initiated', url: null });
     
     const srtFile = path.join(__dirname, `sub_${jobId}.srt`);
+    const rawVideo = path.join(__dirname, `raw_${jobId}.mp4`);
     const finalVideo = path.join(__dirname, `final_${jobId}.mp4`);
     const finalFileName = `viral_short_${jobId}.mp4`;
 
     try {
         console.log(`\n[JOB ${jobId}] Engine Started...`);
 
-        // 1. Generate Subtitles
         let srtContent = '';
         let subtitleIndex = 1;
         fullTranscript.forEach(line => {
@@ -239,123 +237,73 @@ app.post('/process-short', async (req, res) => {
         });
         fs.writeFileSync(srtFile, srtContent);
 
-        // 2. Fetch Direct Media URL from External Cobalt Mesh (V10 APIs)
-        let directCloudUrl = null;
-        let apiErrorText = 'All nodes failed to respond.';
+        // V13: STRICT DESKTOP COOKIE ENGINE
+        const cookiesPath = path.join(__dirname, 'cookies.txt');
+        if (!fs.existsSync(cookiesPath)) {
+            processQueue.set(jobId, { status: 'Failed: Missing cookies.txt in server directory.' });
+            return cleanupFiles([srtFile, rawVideo]);
+        }
+
+        processQueue.set(jobId, { status: 'Authenticating via VIP Desktop Cookies...' });
         
-        // Multi-Node Fallback System
-        const apiInstances = [
-            'https://api.cobalt.tools/',
-            'https://co.wuk.sh/',
-            'https://api.timelessnesses.me/'
-        ];
-
-        for (const apiUrl of apiInstances) {
-            try {
-                processQueue.set(jobId, { status: `Pinging node: ${apiUrl.split('/')[2]}...` });
-                
-                // V10 Updated Endpoint & Body ('videoQuality' instead of 'vQuality')
-                const cobaltResponse = await fetch(apiUrl, {
-                    method: 'POST',
-                    headers: {
-                        'Accept': 'application/json',
-                        'Content-Type': 'application/json',
-                        'Origin': 'https://cobalt.tools',
-                        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
-                    },
-                    body: JSON.stringify({
-                        url: youtubeUrl,
-                        videoQuality: "1080",
-                        disableMetadata: true
-                    })
-                });
-                
-                const cobaltData = await cobaltResponse.json();
-                
-                // Check if this specific API node returned an error
-                if (cobaltData.status === 'error') {
-                     apiErrorText = cobaltData.text || 'Unknown Node Error';
-                     console.log(`[JOB ${jobId}] Node ${apiUrl} returned error: ${apiErrorText}`);
-                     continue; // Jump to the next API in the list
-                }
-                
-                // If we got the video URL, break out of the loop!
-                if (cobaltData.url) {
-                    directCloudUrl = cobaltData.url;
-                    break; 
-                }
-            } catch (e) {
-                console.log(`[JOB ${jobId}] Failed to connect to ${apiUrl}: ${e.message}`);
-            }
-        }
-
-        // If ALL nodes failed
-        if (!directCloudUrl) {
-            console.error(`[JOB ${jobId}] Mesh failed. Last error:`, apiErrorText);
-            processQueue.set(jobId, { status: 'Failed: External API Error', error: apiErrorText });
-            return cleanupFiles([srtFile]);
-        }
-
-        console.log(`[JOB ${jobId}] Received cloud URL. Starting FFmpeg stream...`);
-        processQueue.set(jobId, { status: 'Cloud Streaming & Applying Filters...' });
-
-        // 3. Cloud Render (FFmpeg directly processes the remote URL)
-        let bgmCommand = '';
-        let audioFilter = '-c:a copy'; 
-        const bgmDir = path.join(__dirname, 'bgm');
-        if (fs.existsSync(bgmDir)) {
-            const files = fs.readdirSync(bgmDir).filter(f => f.endsWith('.mp3'));
-            if (files.length > 0) {
-                const randomBgm = path.join(bgmDir, files[Math.floor(Math.random() * files.length)]);
-                bgmCommand = `-stream_loop -1 -i "${randomBgm}"`;
-                audioFilter = `-filter_complex "[0:a]volume=1.0[main];[1:a]volume=0.10[bgm];[main][bgm]amix=inputs=2:duration=first:dropout_transition=0" -c:a aac`;
-            }
-        }
-
-        const bgColor = BACKGROUND_COLORS[Math.floor(Math.random() * BACKGROUND_COLORS.length)];
-        const borderColor = BORDER_COLORS[Math.floor(Math.random() * BORDER_COLORS.length)];
-
-        const videoFilter = `-vf "scale=1000:-1:force_original_aspect_ratio=decrease,pad=1080:1920:(ow-iw)/2:(oh-ih)/2:color='#0f172a',drawtext=text='${finalWatermark}':fontcolor=white@0.4:fontsize=46:x=(w-text_w)/2:y=150,subtitles=${srtFile}:force_style='Fontname=Liberation Sans,FontSize=26,PrimaryColour=&H00FFFF,Outline=1,Shadow=2,MarginV=250'"`;
+        // This command forces the Desktop Web Client to perfectly match your Desktop Cookies.
+        const downloadCmd = `yt-dlp --rm-cache-dir --cookies "${cookiesPath}" --extractor-args "youtube:player_client=web" -f "bestvideo[height<=1080][ext=mp4]+bestaudio[ext=m4a]/best" --download-sections "*${startTime}-${endTime}" "${youtubeUrl}" -o "${rawVideo}"`;
         
-        // The Magic Command: It slices the video over the internet without downloading the whole file
-        const ffmpegCmd = `ffmpeg -y -ss ${startTime} -to ${endTime} -i "${directCloudUrl}" ${bgmCommand} ${videoFilter} ${audioFilter} -c:v libx264 -preset veryfast -crf 28 -threads 2 "${finalVideo}"`;
-
-        exec(ffmpegCmd, { maxBuffer: 1024 * 1024 * 10 }, async (ffError, ffStdout, ffStderr) => {
-            if (ffError) {
-                console.error(`[JOB ${jobId}] FFmpeg Error:`, ffStderr);
-                processQueue.set(jobId, { status: 'Failed: FFmpeg Render Error', error: "Could not stream from cloud." });
-                return cleanupFiles([srtFile, finalVideo]);
+        exec(downloadCmd, { maxBuffer: 1024 * 1024 * 10 }, async (dlError, stdout, stderr) => {
+            if (dlError) {
+                console.error(`[JOB ${jobId}] Download Error:`, stderr);
+                processQueue.set(jobId, { status: 'Failed: Target Secured by YouTube', error: stderr });
+                return cleanupFiles([srtFile, rawVideo]);
             }
 
-            // 4. Supabase Upload
-            processQueue.set(jobId, { status: 'Uploading to Supabase Node...' });
-            try {
-                const videoBuffer = fs.readFileSync(finalVideo);
-                const { data, error } = await supabase.storage.from('shorts').upload(finalFileName, videoBuffer, { contentType: 'video/mp4', upsert: true });
+            processQueue.set(jobId, { status: 'Applying Cinematic Filters & Watermark...' });
 
-                if (error) throw error;
-
-                const { data: publicUrlData } = supabase.storage.from('shorts').getPublicUrl(finalFileName);
-                console.log(`[JOB ${jobId}] Finished: ${publicUrlData.publicUrl}`);
-
-                processQueue.set(jobId, { status: 'Completed', url: publicUrlData.publicUrl });
-                cleanupFiles([srtFile, finalVideo]);
-
-                setTimeout(() => processQueue.delete(jobId), 3600000);
-
-            } catch (supaError) {
-                console.error(`[JOB ${jobId}] Supabase Error:`, supaError);
-                processQueue.set(jobId, { status: 'Failed: Supabase Upload Error', error: supaError.message });
-                cleanupFiles([srtFile, finalVideo]);
+            let bgmCommand = '';
+            let audioFilter = '-c:a copy'; 
+            const bgmDir = path.join(__dirname, 'bgm');
+            if (fs.existsSync(bgmDir)) {
+                const files = fs.readdirSync(bgmDir).filter(f => f.endsWith('.mp3'));
+                if (files.length > 0) {
+                    const randomBgm = path.join(bgmDir, files[Math.floor(Math.random() * files.length)]);
+                    bgmCommand = `-stream_loop -1 -i "${randomBgm}"`;
+                    audioFilter = `-filter_complex "[0:a]volume=1.0[main];[1:a]volume=0.10[bgm];[main][bgm]amix=inputs=2:duration=first:dropout_transition=0" -c:a aac`;
+                }
             }
+
+            const videoFilter = `-vf "scale=1000:-1:force_original_aspect_ratio=decrease,pad=1080:1920:(ow-iw)/2:(oh-ih)/2:color='#0f172a',drawtext=text='${finalWatermark}':fontcolor=white@0.4:fontsize=46:x=(w-text_w)/2:y=150,subtitles=${srtFile}:force_style='Fontname=Liberation Sans,FontSize=26,PrimaryColour=&H00FFFF,Outline=1,Shadow=2,MarginV=250'"`;
+            const ffmpegCmd = `ffmpeg -y -i "${rawVideo}" ${bgmCommand} ${videoFilter} ${audioFilter} -c:v libx264 -preset veryfast -crf 28 -threads 2 -shortest "${finalVideo}"`;
+
+            exec(ffmpegCmd, { maxBuffer: 1024 * 1024 * 10 }, async (ffError, ffStdout, ffStderr) => {
+                if (ffError) {
+                    processQueue.set(jobId, { status: 'Failed: Render Error', error: ffStderr });
+                    return cleanupFiles([srtFile, rawVideo, finalVideo]);
+                }
+
+                processQueue.set(jobId, { status: 'Uploading to Supabase Node...' });
+                try {
+                    const videoBuffer = fs.readFileSync(finalVideo);
+                    const { data, error } = await supabase.storage.from('shorts').upload(finalFileName, videoBuffer, { contentType: 'video/mp4', upsert: true });
+
+                    if (error) throw error;
+
+                    const { data: publicUrlData } = supabase.storage.from('shorts').getPublicUrl(finalFileName);
+                    processQueue.set(jobId, { status: 'Completed', url: publicUrlData.publicUrl });
+                    cleanupFiles([srtFile, rawVideo, finalVideo]);
+
+                    setTimeout(() => processQueue.delete(jobId), 3600000);
+
+                } catch (supaError) {
+                    processQueue.set(jobId, { status: 'Failed: Upload Error', error: supaError.message });
+                    cleanupFiles([srtFile, rawVideo, finalVideo]);
+                }
+            });
         });
 
     } catch (error) {
-        console.error(`[JOB ${jobId}] Fatal Error:`, error);
         processQueue.set(jobId, { status: 'Failed: Fatal Core Error' });
-        cleanupFiles([srtFile, finalVideo]);
+        cleanupFiles([srtFile, rawVideo, finalVideo]);
     }
 });
 
 const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => console.log(`🚀 NEXUS V12.1 Online on port ${PORT}`));
+app.listen(PORT, () => console.log(`🚀 NEXUS V13 Online on port ${PORT}`));
